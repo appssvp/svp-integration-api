@@ -135,29 +135,81 @@ class ProductividadController extends Controller
         }
     }
 
-    public function resumenPorNombreEspecifico(Request $request)
+public function resumenPorNombreEspecifico(Request $request)
 {
-    $fechaInicio = $request->query('fecha_inicio', now()->format('Y-m-d'));
-    $fechaFin = $request->query('fecha_fin', now()->format('Y-m-d'));
-    $nombre = $request->query('nombre');
+    try {
 
-    $inicio = $fechaInicio . ' 00:00:00';
-    $fin = $fechaFin . ' 23:59:59';
+        $fechaInicio = $request->query('fecha_inicio', now()->format('Y-m-d'));
+        $fechaFin = $request->query('fecha_fin', now()->format('Y-m-d'));
+        $nombre = $request->query('nombre');
 
-    $resumenGeneral = app(self::class)->resumenPorNombre(new Request([
-        'fecha_inicio' => $fechaInicio,
-        'fecha_fin' => $fechaFin,
-    ]));
+        if (!$nombre) {
+            return response()->json(['success' => false, 'message' => 'El nombre es obligatorio'], 400);
+        }
 
-    // Convertir a colección y filtrar
-    $datos = collect($resumenGeneral->getData(true)['data'])->first(function ($item) use ($nombre) {
-        return \Illuminate\Support\Str::ascii(\Illuminate\Support\Str::lower(trim($item['operador'])))
-            === \Illuminate\Support\Str::ascii(\Illuminate\Support\Str::lower(trim($nombre)));
-    });
+        $inicio = $fechaInicio . ' 00:00:00';
+        $fin = $fechaFin . ' 23:59:59';
 
-    return response()->json([
-        'success' => true,
-        'data' => $datos ?? null
-    ]);
+        $comentarios = HCapturaComentario::where('nombre', $nombre)
+            ->whereBetween('fecha_hora_registro', [$inicio, $fin])
+            ->whereNotNull('comentarios')
+            ->where('comentarios', '!=', '')
+            ->count();
+
+        $evasiones = HCapturaEvasion::where('operador', $nombre) 
+            ->whereBetween('fecha_hora_registro', [$inicio, $fin])
+            ->count();
+
+        $operaciones = HCapturaOperacion::where('nombre', $nombre)
+            ->whereBetween('fecha_hora', [$inicio, $fin])
+            ->where('tipo', '!=', 'forzado')
+            ->count();
+
+        $forzados = HCapturaOperacion::where('nombre', $nombre)
+            ->whereBetween('fecha_hora', [$inicio, $fin])
+            ->where('tipo', 'forzado')
+            ->count();
+
+        $proveedores = HCapturaProveedor::where('operador', $nombre)
+            ->whereBetween('fecha', [$inicio, $fin])
+            ->count();
+
+        $ingresos = HIngreso::where('nombre', $nombre)
+            ->whereBetween('fecha_registro', [$inicio, $fin])
+            ->whereIn('motivo', ['Por_Recarga', 'Usuario_frecuente_o_saldo_valido', 'ingreso_por_apoyo', 'ingreso_dado'])
+            ->count();
+
+        $rechazos = HIngreso::where('nombre', $nombre)
+            ->whereBetween('fecha_registro', [$inicio, $fin])
+            ->whereIn('motivo', ['sin_saldo', 'tag_no_valido'])
+            ->count();
+
+        $empleado = ListaPersonalOperacion::where('nombre', $nombre)->first();
+        $puesto = $empleado ? $empleado->puesto : null;
+
+        $datos = [
+            'operador'    => $nombre,
+            'comentarios' => $comentarios,
+            'evasiones'   => $evasiones,
+            'operaciones' => $operaciones,
+            'forzados'    => $forzados,
+            'proveedores' => $proveedores,
+            'ingresos'    => $ingresos,
+            'rechazos'    => $rechazos,
+            'puesto'      => $puesto
+        ];
+
+        return response()->json([
+            'success' => true,
+            'data'    => $datos
+        ]);
+
+    } catch (\Exception $e) {
+        return response()->json([
+            'success' => false,
+            'message' => 'Error en el servidor al obtener operador',
+            'error'   => $e->getMessage()
+        ], 500);
+    }
 }
 }
