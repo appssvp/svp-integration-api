@@ -212,4 +212,74 @@ public function resumenPorNombreEspecifico(Request $request)
         ], 500);
     }
 }
+
+
+
+public function detalleAppMovil(Request $request)
+{
+    $request->validate([
+        'nombre' => 'required|string',
+        'tipo'   => 'required|string',
+        'fecha_inicio' => 'required|date',
+        'fecha_fin'    => 'required|date',
+    ]);
+
+    $nombre = $request->nombre;
+    $inicio = $request->fecha_inicio . ' 00:00:00';
+    $fin    = $request->fecha_fin . ' 23:59:59';
+
+    switch ($request->tipo) {
+
+        case 'comentarios':
+            return HCapturaComentario::where('nombre', $nombre)
+                ->whereBetween('fecha_hora_registro', [$inicio, $fin])
+                ->whereNotNull('comentarios')
+                ->where('comentarios', '!=', '')
+                ->orderByDesc('fecha_hora_registro')
+                ->get();
+
+        case 'evasiones':
+            return HCapturaEvasion::where('operador', $nombre)
+                ->whereBetween('fecha_hora_registro', [$inicio, $fin])
+                ->orderByDesc('fecha_hora_registro')
+                ->get();
+
+        case 'forzados':
+            return HCapturaOperacion::where('nombre', $nombre)
+                ->where('tipo', 'forzado')
+                ->whereBetween('fecha_hora', [$inicio, $fin])
+                ->orderByDesc('fecha_hora')
+                ->get();
+
+        case 'ingresos':
+            return HIngreso::where('nombre', $nombre)
+                ->whereBetween('fecha_registro', [$inicio, $fin])
+                ->whereIn('motivo', [
+                    'Por_Recarga',
+                    'Usuario_frecuente_o_saldo_valido',
+                    'ingreso_por_apoyo',
+                    'ingreso_dado'
+                ])
+                ->orderByDesc('fecha_registro')
+                ->get();
+
+        case 'rechazos':  // ← NUEVA OPCIÓN AGREGADA
+            return HIngreso::where('nombre', $nombre)
+                ->whereBetween('fecha_registro', [$inicio, $fin])
+                ->whereIn('motivo', [
+                    'sin_saldo',
+                    'tag_no_valido'
+                ])
+                ->orderByDesc('fecha_registro')
+                ->get();
+
+        default:
+            return response()->json([], 200);
+    }
+}
+
+
+
+
+
 }

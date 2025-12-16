@@ -109,7 +109,16 @@ Route::middleware('auth:sanctum')->get('/capturas-proveedores', [HCapturaProveed
 
 Route::middleware('auth:sanctum')->get('/productividad/resumen-nombres', [ProductividadController::class, 'resumenPorNombre']);
 Route::middleware('auth:sanctum')->get('/productividad/resumen-por-operador', [ProductividadController::class, 'resumenPorNombreEspecifico']);
+Route::middleware('auth:sanctum')
+    ->get('/productividad/app-movil-detalle', 
+        [ProductividadController::class, 'detalleAppMovil']
+    );
 
+Route::middleware('auth:sanctum')->group(function () {
+    Route::get('/productividad/resumen-por-operador/resumen-por-nombre-especifico', [ProductividadController::class, 'resumenPorNombreEspecifico']);
+    Route::get('/productividad/resumen-por-nombre', [ProductividadController::class, 'resumenPorNombre']);
+});
+    
 
 
 
