@@ -15,6 +15,30 @@ use Illuminate\Support\Facades\DB;
 
 class ProductividadController extends Controller
 {
+
+    private function obtenerIngresosConDictamenes($nombre, $inicio, $fin, $motivos)
+{
+    return HIngreso::with([
+        'dictamenes:id,id_ingresos,estatus,operador_dictamina,fecha_dictamen,importe,num_id'
+    ])
+        ->where('nombre', $nombre)
+        ->whereBetween('fecha_registro', [$inicio, $fin])
+        ->whereIn('motivo', $motivos)
+        ->orderByDesc('fecha_registro')
+        ->get()
+        ->transform(function ($ingreso) {
+            $dictamen = $ingreso->dictamenes->first();
+
+            $ingreso->estatus_dictamen = $dictamen->estatus ?? null;
+            $ingreso->operador_dictamina = $dictamen->operador_dictamina ?? null;
+            $ingreso->fecha_dictamen = $dictamen->fecha_dictamen ?? null;
+            $ingreso->importe = $dictamen->importe ?? null;
+            $ingreso->num_id = $dictamen->num_id ?? null;
+
+            unset($ingreso->dictamenes);
+            return $ingreso;
+        });
+}
     public function resumenPorNombre(Request $request)
     {
         try {
@@ -214,7 +238,7 @@ public function resumenPorNombreEspecifico(Request $request)
 }
 
 
-
+// Y actualizar el método detalleAppMovil:
 public function detalleAppMovil(Request $request)
 {
     $request->validate([
@@ -229,7 +253,6 @@ public function detalleAppMovil(Request $request)
     $fin    = $request->fecha_fin . ' 23:59:59';
 
     switch ($request->tipo) {
-
         case 'comentarios':
             return HCapturaComentario::where('nombre', $nombre)
                 ->whereBetween('fecha_hora_registro', [$inicio, $fin])
@@ -252,26 +275,18 @@ public function detalleAppMovil(Request $request)
                 ->get();
 
         case 'ingresos':
-            return HIngreso::where('nombre', $nombre)
-                ->whereBetween('fecha_registro', [$inicio, $fin])
-                ->whereIn('motivo', [
-                    'Por_Recarga',
-                    'Usuario_frecuente_o_saldo_valido',
-                    'ingreso_por_apoyo',
-                    'ingreso_dado'
-                ])
-                ->orderByDesc('fecha_registro')
-                ->get();
+            return $this->obtenerIngresosConDictamenes($nombre, $inicio, $fin, [
+                'Por_Recarga',
+                'Usuario_frecuente_o_saldo_valido',
+                'ingreso_por_apoyo',
+                'ingreso_dado'
+            ]);
 
-        case 'rechazos':  // ← NUEVA OPCIÓN AGREGADA
-            return HIngreso::where('nombre', $nombre)
-                ->whereBetween('fecha_registro', [$inicio, $fin])
-                ->whereIn('motivo', [
-                    'sin_saldo',
-                    'tag_no_valido'
-                ])
-                ->orderByDesc('fecha_registro')
-                ->get();
+        case 'rechazos':
+            return $this->obtenerIngresosConDictamenes($nombre, $inicio, $fin, [
+                'sin_saldo',
+                'tag_no_valido'
+            ]);
 
         default:
             return response()->json([], 200);
